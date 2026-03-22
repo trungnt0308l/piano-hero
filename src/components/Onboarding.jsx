@@ -9,6 +9,7 @@ export default function Onboarding({ onComplete }) {
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('🐱');
   const [micDetected, setMicDetected] = useState(false);
+  const [micError, setMicError] = useState('');
 
   const { micStatus, start, stop } = usePitchDetection({
     onNoteDetected: (midi) => {
@@ -22,8 +23,14 @@ export default function Onboarding({ onComplete }) {
 
   // Called directly from onClick so getUserMedia fires inside a user gesture
   const handleMicStep = () => {
+    // Check for secure context first — getUserMedia requires HTTPS or localhost
+    if (!navigator.mediaDevices || !window.isSecureContext) {
+      setMicError('Microphone requires HTTPS. Open this app via https:// or on localhost.');
+      setStep(3);
+      return;
+    }
     setStep(3);
-    start(); // must be called synchronously here, not via useEffect
+    start().catch(e => setMicError(e.message));
   };
 
   const handleFinish = async () => {
@@ -102,24 +109,34 @@ export default function Onboarding({ onComplete }) {
       )}
 
       {step === 3 && (
-        <div>
+        <div style={{ width: '100%' }}>
           <div style={{ fontSize: 56, marginBottom: 16 }}>
-            {micDetected ? '✅' : micStatus === 'denied' ? '❌' : '🎹'}
+            {micDetected ? '✅' : (micStatus === 'denied' || micError) ? '❌' : micStatus === 'listening' ? '🎤' : '⏳'}
           </div>
           <h2 style={{ fontSize: 24, marginBottom: 12 }}>
-            {micDetected ? 'Got it!' : micStatus === 'denied' ? 'Mic Blocked' : 'Play Any Note!'}
+            {micDetected ? 'Got it!' : (micStatus === 'denied' || micError) ? 'Mic Problem' : micStatus === 'listening' ? 'Play Any Note!' : 'Starting mic…'}
           </h2>
-          <p style={{ color: '#8888aa', marginBottom: 32, lineHeight: 1.5 }}>
+          <p style={{ color: '#8888aa', marginBottom: 16, lineHeight: 1.5 }}>
             {micDetected
               ? 'Your piano is coming through loud and clear!'
+              : micError
+              ? micError
               : micStatus === 'denied'
-              ? 'Please allow microphone access in your browser settings and try again.'
-              : 'Place your phone near the piano and press any key...'}
+              ? 'Microphone access was blocked. Please allow it in your browser/site settings and reload.'
+              : micStatus === 'listening'
+              ? 'Place your phone near the piano and press any key...'
+              : 'Requesting microphone access…'}
           </p>
-          {micStatus !== 'denied' && !micDetected && (
-            <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(0,229,255,0.2)', border: '2px solid #00e5ff', margin: '0 auto', animation: 'pulse 1s infinite' }} />
+          {micStatus === 'listening' && !micDetected && (
+            <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(0,229,255,0.2)', border: '2px solid #00e5ff', margin: '0 auto 16px', animation: 'pulse 1s infinite' }} />
           )}
-          <div style={{ marginTop: 32 }}>
+          {/* Secure context warning */}
+          {micError && micError.includes('HTTPS') && (
+            <div style={{ background: '#1a0a0a', border: '1px solid #ff4444', borderRadius: 10, padding: 12, fontSize: 12, color: '#ff8888', marginBottom: 16, textAlign: 'left' }}>
+              <strong>How to fix:</strong> Deploy to a site with HTTPS, or open on the same computer using <code>localhost:5173</code>. Phones on local Wi-Fi (192.168.x.x) can't access the mic over plain HTTP.
+            </div>
+          )}
+          <div style={{ marginTop: 16 }}>
             <button className="btn-secondary" onClick={() => setStep(4)} style={{ maxWidth: 200, margin: '0 auto', display: 'block' }}>
               Skip for now
             </button>
