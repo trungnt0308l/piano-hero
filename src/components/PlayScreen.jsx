@@ -7,7 +7,7 @@ import { getJudgment, calcNoteScore } from '../utils/scoring';
 import MiniKeyboard from './MiniKeyboard';
 import SongClear from './SongClear';
 
-const FALL_SPEED = 200; // px per second
+const FALL_SPEED_BY_DIFFICULTY = { 1: 70, 2: 100, 3: 140 }; // px per second
 const HIT_LINE_RATIO = 0.78; // hit line at 78% down the canvas
 const COLORS = {
   right: { fill: '#ff6b6b', glow: '#ff4444' },
@@ -30,7 +30,7 @@ export default function PlayScreen({ practiceMode = false }) {
   const [litKeys, setLitKeys] = useState([]);
   const [activeKeys, setActiveKeys] = useState([]);
   const [practiceSpeed, setPracticeSpeed] = useState(1.0);
-  const hitWindowRef = useRef(0.15);
+  const hitWindowRef = useRef(0.3); // ±300ms — generous for beginners
   const finishedRef = useRef(false);
 
   // Compute the MIDI range of the song
@@ -76,7 +76,7 @@ export default function PlayScreen({ practiceMode = false }) {
     const W = canvas.width;
     const H = canvas.height;
     const hitLineY = H * HIT_LINE_RATIO;
-    const speed = FALL_SPEED * practiceSpeed;
+    const speed = (FALL_SPEED_BY_DIFFICULTY[song.difficulty] ?? 150) * practiceSpeed;
 
     if (gs.startTime === null) gs.startTime = now;
     gs.elapsed = (now - gs.startTime) * practiceSpeed;

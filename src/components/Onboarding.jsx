@@ -1,34 +1,72 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { usePitchDetection } from '../hooks/usePitchDetection';
 import { saveProfile } from '../utils/db';
 
 const AVATARS = ['🐱', '🐶', '🐸', '🦊', '🐼', '🐨', '🐯', '🦁', '🐙', '🦄'];
 
+// The 7 notes to detect: C4 D4 E4 F4 G4 A4 B4
+// Each entry: label, and a set of MIDI numbers that count as that note (across octaves)
+const CALIBRATION_NOTES = [
+  { label: 'C', semitone: 0 },
+  { label: 'D', semitone: 2 },
+  { label: 'E', semitone: 4 },
+  { label: 'F', semitone: 5 },
+  { label: 'G', semitone: 7 },
+  { label: 'A', semitone: 9 },
+  { label: 'B', semitone: 11 },
+];
+
 export default function Onboarding({ onComplete }) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('🐱');
-  const [micDetected, setMicDetected] = useState(false);
   const [micError, setMicError] = useState('');
+  const [detectedSemitones, setDetectedSemitones] = useState(new Set());
+  const [lastDetected, setLastDetected] = useState(null); // label of most recently detected note
+  const lastDetectedRef = useRef(null);
+
+  const allDetected = CALIBRATION_NOTES.every(n => detectedSemitones.has(n.semitone));
 
   const { micStatus, start, stop } = usePitchDetection({
     onNoteDetected: (midi) => {
-      if (midi >= 21 && midi <= 108) {
-        setMicDetected(true);
-        stop();
-        setTimeout(() => setStep(4), 800);
+      const semitone = midi % 12;
+      const match = CALIBRATION_NOTES.find(n => n.semitone === semitone);
+      if (!match) return;
+
+      setDetectedSemitones(prev => {
+        const next = new Set(prev);
+        next.add(semitone);
+        return next;
+      });
+
+      // Flash label feedback — debounce so it doesn't flicker too fast
+      if (lastDetectedRef.current !== match.label) {
+        lastDetectedRef.current = match.label;
+        setLastDetected(match.label);
+        setTimeout(() => {
+          lastDetectedRef.current = null;
+          setLastDetected(null);
+        }, 600);
       }
     }
   });
 
-  // Called directly from onClick so getUserMedia fires inside a user gesture
+  // Auto-advance once all 7 are hit
+  const allDetectedRef = useRef(false);
+  if (allDetected && !allDetectedRef.current) {
+    allDetectedRef.current = true;
+    stop();
+    setTimeout(() => setStep(4), 900);
+  }
+
   const handleMicStep = () => {
-    // Check for secure context first — getUserMedia requires HTTPS or localhost
     if (!navigator.mediaDevices || !window.isSecureContext) {
       setMicError('Microphone requires HTTPS. Open this app via https:// or on localhost.');
       setStep(3);
       return;
     }
+    setDetectedSemitones(new Set());
+    allDetectedRef.current = false;
     setStep(3);
     start().catch(e => setMicError(e.message));
   };
@@ -81,7 +119,7 @@ export default function Onboarding({ onComplete }) {
               width: '100%', padding: '14px 16px', borderRadius: 12,
               background: '#1a1a3a', border: '1px solid #333366',
               color: '#fff', fontSize: 16, marginBottom: 24,
-              outline: 'none',
+              outline: 'none', boxSizing: 'border-box',
             }}
           />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 32 }}>
@@ -110,37 +148,75 @@ export default function Onboarding({ onComplete }) {
 
       {step === 3 && (
         <div style={{ width: '100%' }}>
-          <div style={{ fontSize: 56, marginBottom: 16 }}>
-            {micDetected ? '✅' : (micStatus === 'denied' || micError) ? '❌' : micStatus === 'listening' ? '🎤' : '⏳'}
+          {/* Header */}
+          <div style={{ fontSize: 40, marginBottom: 10 }}>
+            {micError || micStatus === 'denied' ? '❌' : allDetected ? '✅' : '🎤'}
           </div>
-          <h2 style={{ fontSize: 24, marginBottom: 12 }}>
-            {micDetected ? 'Got it!' : (micStatus === 'denied' || micError) ? 'Mic Problem' : micStatus === 'listening' ? 'Play Any Note!' : 'Starting mic…'}
+          <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>
+            {micError || micStatus === 'denied'
+              ? 'Mic Problem'
+              : allDetected
+              ? 'Perfect!'
+              : micStatus === 'listening'
+              ? 'Play each note once'
+              : 'Starting mic…'}
           </h2>
-          <p style={{ color: '#8888aa', marginBottom: 16, lineHeight: 1.5 }}>
-            {micDetected
-              ? 'Your piano is coming through loud and clear!'
-              : micError
+          <p style={{ color: '#8888aa', fontSize: 13, marginBottom: 20, lineHeight: 1.5 }}>
+            {micError
               ? micError
               : micStatus === 'denied'
-              ? 'Microphone access was blocked. Please allow it in your browser/site settings and reload.'
-              : micStatus === 'listening'
-              ? 'Place your phone near the piano and press any key...'
-              : 'Requesting microphone access…'}
+              ? 'Microphone access was blocked. Allow it in browser settings and reload.'
+              : allDetected
+              ? 'All notes detected! Great sound.'
+              : 'Play C D E F G A B on your piano — any octave'}
           </p>
-          {micStatus === 'listening' && !micDetected && (
-            <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(0,229,255,0.2)', border: '2px solid #00e5ff', margin: '0 auto 16px', animation: 'pulse 1s infinite' }} />
-          )}
-          {/* Secure context warning */}
+
+          {/* HTTPS error box */}
           {micError && micError.includes('HTTPS') && (
             <div style={{ background: '#1a0a0a', border: '1px solid #ff4444', borderRadius: 10, padding: 12, fontSize: 12, color: '#ff8888', marginBottom: 16, textAlign: 'left' }}>
-              <strong>How to fix:</strong> Deploy to a site with HTTPS, or open on the same computer using <code>localhost:5173</code>. Phones on local Wi-Fi (192.168.x.x) can't access the mic over plain HTTP.
+              <strong>How to fix:</strong> Open via <code>https://</code> or <code>localhost</code>. Plain HTTP on a local IP doesn't allow microphone access.
             </div>
           )}
-          <div style={{ marginTop: 16 }}>
-            <button className="btn-secondary" onClick={() => setStep(4)} style={{ maxWidth: 200, margin: '0 auto', display: 'block' }}>
-              Skip for now
-            </button>
-          </div>
+
+          {/* Note checklist */}
+          {!micError && micStatus !== 'denied' && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+              {CALIBRATION_NOTES.map(n => {
+                const done = detectedSemitones.has(n.semitone);
+                const active = lastDetected === n.label;
+                return (
+                  <div key={n.label} style={{
+                    width: 44, height: 56,
+                    borderRadius: 10,
+                    background: done ? '#00e5ff22' : '#1a1a3a',
+                    border: `2px solid ${active ? '#fff' : done ? '#00e5ff' : '#333366'}`,
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
+                    gap: 4,
+                    transition: 'all 0.15s',
+                    transform: active ? 'scale(1.15)' : 'scale(1)',
+                  }}>
+                    <span style={{ fontSize: 18, fontWeight: 800, color: done ? '#00e5ff' : '#aaa' }}>
+                      {n.label}
+                    </span>
+                    <span style={{ fontSize: 16 }}>{done ? '✓' : '·'}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Progress count */}
+          {micStatus === 'listening' && !micError && (
+            <p style={{ color: '#8888aa', fontSize: 13, marginBottom: 20 }}>
+              {detectedSemitones.size} / 7 detected
+            </p>
+          )}
+
+          <button className="btn-secondary" onClick={() => setStep(4)}
+            style={{ maxWidth: 200, margin: '0 auto', display: 'block' }}>
+            Skip for now
+          </button>
         </div>
       )}
 
