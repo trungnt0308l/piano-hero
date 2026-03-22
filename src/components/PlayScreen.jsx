@@ -25,7 +25,7 @@ export default function PlayScreen({ practiceMode = false }) {
   const gameStateRef = useRef(null);
   const [hud, setHud] = useState({ score: 0, combo: 0, lives: 3 });
   const [judgmentDisplay, setJudgmentDisplay] = useState(null);
-  const [gamePhase, setGamePhase] = useState('playing'); // playing | finished
+  const [gamePhase, setGamePhase] = useState('ready'); // ready | playing | finished
   const [result, setResult] = useState(null);
   const [litKeys, setLitKeys] = useState([]);
   const [activeKeys, setActiveKeys] = useState([]);
@@ -254,7 +254,7 @@ export default function PlayScreen({ practiceMode = false }) {
   }, []);
 
   const { micStatus } = usePitchDetection({
-    enabled: gamePhase === 'playing' && !practiceMode,
+    enabled: gamePhase === 'playing',
     onNoteDetected,
   });
 
@@ -274,11 +274,43 @@ export default function PlayScreen({ practiceMode = false }) {
         result={result}
         onRetry={() => {
           initGameState();
-          setGamePhase('playing');
+          setGamePhase('ready');
           setResult(null);
           setHud({ score: 0, combo: 0, lives: 3 });
         }}
       />
+    );
+  }
+
+  if (gamePhase === 'ready') {
+    return (
+      <div style={{
+        height: '100dvh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        background: 'linear-gradient(180deg, #0a0a1a, #1a0a2e)',
+        padding: 24, textAlign: 'center',
+      }}>
+        <button onClick={() => navigate(-1)} style={{
+          position: 'absolute', top: 16, left: 16,
+          background: 'none', border: 'none', color: '#8888aa', fontSize: 20, cursor: 'pointer',
+        }}>←</button>
+        <div style={{ fontSize: 52, marginBottom: 12 }}>🎹</div>
+        <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>{song.title}</h2>
+        <div style={{ fontSize: 13, color: '#8888aa', marginBottom: 32 }}>
+          {song.difficulty === 1 ? '⭐ Easy' : song.difficulty === 2 ? '⭐⭐ Medium' : '⭐⭐⭐ Hard'}
+          {' · '}{song.notes.length} notes
+        </div>
+        <div style={{
+          background: '#12122a', borderRadius: 12, padding: '12px 16px',
+          marginBottom: 32, fontSize: 13, color: '#8888aa', maxWidth: 280,
+        }}>
+          🎤 Place your phone near the piano keys and play the notes as they fall!
+        </div>
+        <button className="btn-primary" style={{ maxWidth: 240 }}
+          onClick={() => setGamePhase('playing')}>
+          Tap to Start ▶
+        </button>
+      </div>
     );
   }
 
@@ -320,10 +352,27 @@ export default function PlayScreen({ practiceMode = false }) {
         {/* Mic status indicator */}
         <div style={{
           position: 'absolute', top: 8, right: 8,
-          width: 10, height: 10, borderRadius: '50%',
-          background: micStatus === 'listening' ? '#00ff88' : '#ff4444',
-          title: micStatus,
-        }} />
+          background: 'rgba(0,0,0,0.7)', borderRadius: 20,
+          padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 5,
+          fontSize: 11, color: micStatus === 'listening' ? '#00ff88' : micStatus === 'denied' ? '#ff4444' : '#ffaa00',
+        }}>
+          <div style={{
+            width: 7, height: 7, borderRadius: '50%',
+            background: 'currentColor',
+          }} />
+          {micStatus === 'listening' ? 'Listening' : micStatus === 'denied' ? 'Mic denied' : 'Starting mic…'}
+        </div>
+
+        {/* Mic denied banner */}
+        {micStatus === 'denied' && (
+          <div style={{
+            position: 'absolute', bottom: 80, left: 12, right: 12,
+            background: 'rgba(255,60,60,0.9)', borderRadius: 10,
+            padding: '10px 14px', fontSize: 13, textAlign: 'center', color: '#fff',
+          }}>
+            Microphone blocked. Allow mic access in browser settings, then reload.
+          </div>
+        )}
 
         {/* Practice mode speed control */}
         {practiceMode && (

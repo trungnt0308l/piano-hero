@@ -37,9 +37,12 @@ export function usePitchDetection({ onNoteDetected, enabled = true }) {
       const detect = () => {
         analyser.getFloatTimeDomainData(buf);
         const [pitch, clarity] = detectorRef.current.findPitch(buf, ctx.sampleRate);
-        if (clarity > 0.9 && pitch > 60) {
+        // Lower threshold (0.85) to work better with phone mics further from the piano
+        if (clarity > 0.85 && pitch > 50 && pitch < 5000) {
           const midi = Math.round(12 * Math.log2(pitch / 440) + 69);
-          onNoteDetected?.(midi, ctx.currentTime);
+          if (midi >= 21 && midi <= 108) { // valid piano range
+            onNoteDetected?.(midi, ctx.currentTime);
+          }
         }
         rafRef.current = requestAnimationFrame(detect);
       };
@@ -57,7 +60,7 @@ export function usePitchDetection({ onNoteDetected, enabled = true }) {
       setMicStatus('idle');
     }
     return stop;
-  }, [enabled]);
+  }, [enabled, start, stop]);
 
   return { micStatus, start, stop };
 }
