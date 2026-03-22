@@ -9,12 +9,10 @@ export default function Onboarding({ onComplete }) {
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('🐱');
   const [micDetected, setMicDetected] = useState(false);
-  const [calibrating, setCalibrating] = useState(false);
 
   const { micStatus, start, stop } = usePitchDetection({
-    enabled: calibrating,
     onNoteDetected: (midi) => {
-      if (midi > 30 && midi < 110) {
+      if (midi >= 21 && midi <= 108) {
         setMicDetected(true);
         stop();
         setTimeout(() => setStep(4), 800);
@@ -22,9 +20,10 @@ export default function Onboarding({ onComplete }) {
     }
   });
 
-  const handleMicStep = async () => {
-    setCalibrating(true);
+  // Called directly from onClick so getUserMedia fires inside a user gesture
+  const handleMicStep = () => {
     setStep(3);
+    start(); // must be called synchronously here, not via useEffect
   };
 
   const handleFinish = async () => {

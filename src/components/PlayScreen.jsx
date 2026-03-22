@@ -202,6 +202,9 @@ export default function PlayScreen({ practiceMode = false }) {
     return stop;
   }, [gamePhase]);
 
+  // Stop mic when component unmounts
+  useEffect(() => () => stopMic(), []);
+
   // Canvas resize
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -253,10 +256,7 @@ export default function PlayScreen({ practiceMode = false }) {
     setTimeout(() => setActiveKeys([]), 300);
   }, []);
 
-  const { micStatus } = usePitchDetection({
-    enabled: gamePhase === 'playing',
-    onNoteDetected,
-  });
+  const { micStatus, start: startMic, stop: stopMic } = usePitchDetection({ onNoteDetected });
 
   if (!song) {
     return (
@@ -307,7 +307,7 @@ export default function PlayScreen({ practiceMode = false }) {
           🎤 Place your phone near the piano keys and play the notes as they fall!
         </div>
         <button className="btn-primary" style={{ maxWidth: 240 }}
-          onClick={() => setGamePhase('playing')}>
+          onClick={() => { startMic(); setGamePhase('playing'); }}>
           Tap to Start ▶
         </button>
       </div>
